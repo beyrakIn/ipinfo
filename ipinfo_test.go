@@ -9,8 +9,8 @@ func TestIsValidIp(t *testing.T) {
 		{"255.256.100.2", false},
 		{"-100.200.182.160", false},
 		{"300.200.182.160", false},
-		{"100.300.182.160", false},
-		{"150.18.182.260", false},
+		{"100.2333.182.160", false},
+		{"150.18.182,26", false},
 	}
 
 	for _, v := range table {
