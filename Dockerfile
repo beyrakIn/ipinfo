@@ -1,4 +1,4 @@
-FROM golang as go
+FROM golang as golang
 
 COPY . ./app
 
@@ -12,14 +12,12 @@ COPY go.mod go.sum ./
 
 RUN go mod download
 
-RUN go mod tidy
-
 COPY ./ ./
 
 RUN go build -o ipinfo
 
 FROM scratch
 
-COPY --from=go /app/ipinfo ./
+COPY --from=golang /app/ipinfo ./
 
 ENTRYPOINT [ "./ipinfo" ]

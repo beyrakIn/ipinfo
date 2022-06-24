@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -30,18 +31,20 @@ func main() {
 
 	if IsValidIp(*ip) {
 		url := makeUrl(*ip)
-		response, err := http.Get(url)
+		ctx := context.Background()
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
 
-		defer func() {
-			err := response.Body.Close()
-			if err != nil {
-				log.Fatalln(err.Error())
-			}
-		}()
-
+		client := &http.Client{}
+		req, err := http.NewRequest("GET", url, nil)
 		if err != nil {
-			red(err.Error())
-			return
+			log.Fatal(err)
+		}
+
+		req = req.WithContext(ctx)
+		response, err := client.Do(req)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 		data, _ := io.ReadAll(response.Body)
