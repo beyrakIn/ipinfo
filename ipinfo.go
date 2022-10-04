@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"github.com/fatih/color"
@@ -10,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"os"
 )
 
 var (
@@ -18,19 +20,28 @@ var (
 	yellow = color.Yellow
 )
 
-func main() {
+func init() {
 	header()
+}
 
-	ip := flag.String("ip", "", "Ex: ipinfo -ip 8.8.8.8")
+func main() {
+	defer func() {
+		_ = recover()
+		red("[*]Wrong syntax")
+		green("[*]Please run ipinfo -h")
+	}()
+	_ = flag.String("h", "", "Ex: ipinfo 8.8.8.8")
+	_ = flag.String("help", "", "Ex: ipinfo 8.8.8.8")
 	flag.Parse()
+	ip := os.Args[1]
 
-	if *ip == "" {
+	if ip == "" {
 		green("Please run ipinfo -h")
 		return
 	}
 
-	if IsValidIp(*ip) {
-		url := makeUrl(*ip)
+	if IsValidIp(ip) {
+		url := makeUrl(ip)
 		ctx := context.Background()
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
@@ -85,13 +96,14 @@ func makeUrl(ip string) string {
 }
 
 func header() {
-	head := `.___       .___        _____       
-|   |_____ |   | _____/ ____\____  
-|   \____ \|   |/    \   __\/  _ \ 
-|   |  |_> >   |   |  \  | (  <_> )
-|___|   __/|___|___|  /__|  \____/ 
-    |__|            \/             `
-	yellow(head + "\n")
+	text := "Ll9fXyAgICAgICAuX19fICAgICAgICBfX19fXyAgICAgICAKfCAgIHxfX19fXyB8ICAgfCBfX19fXy8gX19fX1xfX19fICAKfCAgIFxfX19fIFx8ICAgfC8gICAgXCAgIF9fXC8gIF8gXCAKfCAgIHwgIHxfPiA+ICAgfCAgIHwgIFwgIHwgKCAgPF8+ICkKfF9fX3wgICBfXy98X19ffF9fX3wgIC9fX3wgIFxfX19fLyAKICAgIHxfX3wgICAgICAgICAgICBcLyAgICAgICAgICAgICA="
+	yellow(DecodeB64(text) + "\n")
+}
+
+func DecodeB64(message string) string {
+	base64Text := make([]byte, base64.StdEncoding.DecodedLen(len(message)))
+	base64.StdEncoding.Decode(base64Text, []byte(message))
+	return string(base64Text)
 }
 
 type IpInfo struct {
