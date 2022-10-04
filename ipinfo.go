@@ -65,15 +65,15 @@ func main() {
 		}
 
 		green(fmt.Sprintf(`
-	IP: %s
-	Hostname: %s
-	City: %s
-	Region: %s
-	Country: %s
-	Coordinates: %s
-	ASN: %s
-	Postal: %s 
-	Timezone: %s  `, d.IP, d.Hostname, d.City, d.Region, d.Country, d.Loc, d.Org, d.Postal, d.Timezone))
+IP: %s
+Hostname: %s
+City: %s
+Region: %s
+Country: %s
+Coordinates: %s
+ASN: %s
+Postal: %s 
+Timezone: %s  `, d.IP, d.Hostname, d.City, d.Region, d.Country, d.Loc, d.Org, d.Postal, d.Timezone))
 
 	}
 
