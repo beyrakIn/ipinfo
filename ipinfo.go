@@ -27,8 +27,8 @@ func init() {
 func main() {
 	defer func() {
 		_ = recover()
-		red("[*]Wrong syntax")
-		green("[*]Please run ipinfo -h")
+		//red("[*]Wrong syntax")
+		//green("[*]Please run ipinfo -h")
 	}()
 	_ = flag.String("h", "", "Ex: ipinfo 8.8.8.8")
 	_ = flag.String("help", "", "Ex: ipinfo 8.8.8.8")
