@@ -143,7 +143,7 @@ func help() {
 	fmt.Println("  -h, --help\t\t\t\tShow this help message and exit")
 	fmt.Println("  -v, --verbose\t\t\t\tShow full information")
 	fmt.Println("  -w, --workers\t\t\t\tNumber of workers(default: 1)")
-	fmt.Println("  -i, --interval\t\t\tInterval between requests(default: 0.4)")
+	fmt.Println("  -i, --interval\t\t\tInterval between requests(default: 1.0)")
 
 	os.Exit(0)
 }
@@ -186,14 +186,14 @@ type IpInfo struct {
 
 func (info IpInfo) String() string {
 	return fmt.Sprintf(
-		"IP: %s\nIP Decimal: %d\nCountry: %s\nCountry ISO: %s\nCountry EU: %t\nRegion Name: %s\nRegion Code: %s\nCity: %s\nLatitude: %f\nLongitude: %f\nTime Zone: %s\nASN: %s\nASN Org: %s\nUser Agent:\n  Product: %s\n  Version: %s\n  Raw Value: %s\n\n",
+		"[*] %s\nIP Decimal: %d\nCountry: %s\nCountry ISO: %s\nCountry EU: %t\nRegion Name: %s\nRegion Code: %s\nCity: %s\nLatitude: %f\nLongitude: %f\nTime Zone: %s\nASN: %s\nASN Org: %s\nUser Agent:\n  Product: %s\n  Version: %s\n  Raw Value: %s\n\n",
 		info.IP, info.IPDecimal, info.Country, info.CountryIso, info.CountryEu, info.RegionName, info.RegionCode, info.City, info.Latitude, info.Longitude, info.TimeZone, info.Asn, info.AsnOrg, info.UserAgent.Product, info.UserAgent.Version, info.UserAgent.RawValue,
 	)
 }
 
 func (info IpInfo) Detail() string {
 	return fmt.Sprintf(
-		"IP: %s\nCountry: %s\nASN: %s\nASN Org: %s\nTime Zone: %s\n\n",
+		"[*] %s\nCountry: %s\nASN: %s\nASN Org: %s\nTime Zone: %s\n\n",
 		info.IP, info.Country, info.Asn, info.AsnOrg, info.TimeZone,
 	)
 }
