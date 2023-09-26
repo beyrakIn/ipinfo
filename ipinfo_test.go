@@ -14,7 +14,7 @@ func TestIsValidIp(t *testing.T) {
 	}
 
 	for _, v := range table {
-		result := IsValidIp(v.ip)
+		result := checkIpFormat(v.ip)
 
 		if result != v.isValid {
 			t.Errorf("Expection is %t, result is %t", v.isValid, result)

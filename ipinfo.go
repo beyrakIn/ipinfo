@@ -1,17 +1,20 @@
 package main
 
 import (
+	"bufio"
 	"context"
-	"encoding/json"
 	"encoding/base64"
-	"flag"
+	"encoding/json"
 	"fmt"
 	"github.com/fatih/color"
 	"io"
 	"log"
 	"net/http"
-	"regexp"
 	"os"
+	"os/signal"
+	"regexp"
+	"strings"
+	"sync"
 )
 
 var (
@@ -20,101 +23,178 @@ var (
 	yellow = color.Yellow
 )
 
-func init() {
-	header()
-}
+var (
+	domain     = "https://ifconfig.co/?ip="
+	numWorkers = 1
+	verbose    = false
+	done       = make(chan bool)
+)
 
 func main() {
-	defer func() {
-		_ = recover()
-		//red("[*]Wrong syntax")
-		//green("[*]Please run ipinfo -h")
+	header()
+
+	// implementation of command line arguments
+	for i, arg := range os.Args {
+		if arg == "-h" || arg == "--help" {
+			help()
+		} else if arg == "-w" || arg == "--workers" {
+			// convert arg to int
+			numWorkers = int(os.Args[i+1][0] - '0')
+		} else if arg == "-v" || arg == "--verbose" {
+			verbose = true
+		}
+	}
+
+	work := make(chan string)
+
+	go func() {
+		select {
+		case <-done:
+			os.Exit(0)
+		}
 	}()
-	_ = flag.String("h", "", "Ex: ipinfo 8.8.8.8")
-	_ = flag.String("help", "", "Ex: ipinfo 8.8.8.8")
-	flag.Parse()
-	ip := os.Args[1]
 
-	if ip == "" {
-		green("Please run ipinfo -h")
-		return
+	go func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		<-c
+		yellow("\nCTRL+C detected!!!\nThanks for using this tool.\n")
+		done <- true
+	}()
+
+	go func() {
+		s := bufio.NewScanner(os.Stdin)
+		greenshell()
+		for s.Scan() {
+			t := strings.TrimSpace(s.Text())
+			//TODO: check regex here
+			if err := checkInput(t); err != nil {
+				red(err.Error())
+				continue
+			}
+			work <- t
+		}
+		close(work)
+	}()
+
+	wg := &sync.WaitGroup{}
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go doWork(work, wg)
 	}
-
-	if IsValidIp(ip) {
-		url := makeUrl(ip)
-		ctx := context.Background()
-		ctx, cancel := context.WithCancel(ctx)
-		defer cancel()
-
-		client := &http.Client{}
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		req = req.WithContext(ctx)
-		response, err := client.Do(req)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		data, _ := io.ReadAll(response.Body)
-		var d IpInfo
-		if err := json.Unmarshal(data, &d); err != nil {
-			red(err.Error())
-		}
-
-		green(fmt.Sprintf(`
-IP: %s
-Hostname: %s
-City: %s
-Region: %s
-Country: %s
-Coordinates: %s
-ASN: %s
-Postal: %s 
-Timezone: %s  `, d.IP, d.Hostname, d.City, d.Region, d.Country, d.Loc, d.Org, d.Postal, d.Timezone))
-
-	}
+	wg.Wait()
 
 }
 
-func IsValidIp(ip string) bool {
+func help() {
+	// print help
+	fmt.Println("Usage: ipinfo [options]")
+	fmt.Println("Options:")
+	fmt.Println("  -h, --help\t\t\t\tShow this help message and exit")
+	fmt.Println("  -v, --verbose\t\t\t\tShow full information")
+	fmt.Println("  -w, --workers\t\t\t\tNumber of workers(default: 1)")
+
+	os.Exit(0)
+}
+
+func checkInput(t string) error {
+	if strings.ToLower(t) == "exit" {
+		red("Bye bye!!!")
+		done <- true
+	}
+
 	regexS := `^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])$`
 	re := regexp.MustCompile(regexS)
-	if !re.MatchString(ip) {
-		red(ip + " is not valid ip address!!!")
-		return false
+	if !re.MatchString(t) {
+		return fmt.Errorf(t + " is not valid ip address!!!")
 	}
-	return true
+	return nil
+
 }
 
-func makeUrl(ip string) string {
-	domain := "https://ipinfo.io/"
+func doWork(work chan string, wg *sync.WaitGroup) {
+	//TODO: use global request
+	defer wg.Done()
+	ip := <-work
+
 	url := domain + ip
-	return url
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	client := &http.Client{}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	req = req.WithContext(ctx)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Android 4.4; Mobile; rv:41.0) Gecko/41.0 Firefox/41.0")
+	response, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	data, _ := io.ReadAll(response.Body)
+	var d IpInfo
+	if err := json.Unmarshal(data, &d); err != nil {
+		red(err.Error())
+	}
+
+	if verbose == true {
+		green(d.String())
+	} else {
+		green(d.Detail())
+	}
+	greenshell()
 }
 
 func header() {
-	text := "Ll9fXyAgICAgICAuX19fICAgICAgICBfX19fXyAgICAgICAKfCAgIHxfX19fXyB8ICAgfCBfX19fXy8gX19fX1xfX19fICAKfCAgIFxfX19fIFx8ICAgfC8gICAgXCAgIF9fXC8gIF8gXCAKfCAgIHwgIHxfPiA+ICAgfCAgIHwgIFwgIHwgKCAgPF8+ICkKfF9fX3wgICBfXy98X19ffF9fX3wgIC9fX3wgIFxfX19fLyAKICAgIHxfX3wgICAgICAgICAgICBcLyAgICAgICAgICAgICA="
-	yellow(DecodeB64(text) + "\n")
+	text := "IF8gX19fX18gIF8gIF9fICBfICBfX19fICBfX19fIA0KfCB8fCAoKV8pfCB8fCAgXHwgfHwgPT09fC8gKCkgXA0KfF98fF98ICAgfF98fF98XF9ffHxfX3wgIFxfX19fLw0K"
+	base64Text := make([]byte, base64.StdEncoding.DecodedLen(len(text)))
+	base64.StdEncoding.Decode(base64Text, []byte(text))
+	yellow(string(base64Text))
+	red("Press CTRL+C to exit\n\n")
 }
 
-func DecodeB64(message string) string {
-	base64Text := make([]byte, base64.StdEncoding.DecodedLen(len(message)))
-	base64.StdEncoding.Decode(base64Text, []byte(message))
-	return string(base64Text)
+func greenshell() {
+	print(color.YellowString("Enter IP address: "))
 }
 
 type IpInfo struct {
-	IP       string `json:"ip"`
-	Hostname string `json:"hostname"`
-	City     string `json:"city"`
-	Region   string `json:"region"`
-	Country  string `json:"country"`
-	Loc      string `json:"loc"`
-	Org      string `json:"org"`
-	Postal   string `json:"postal"`
-	Timezone string `json:"timezone"`
-	Readme   string `json:"readme"`
+	IP         string  `json:"ip"`
+	IPDecimal  int     `json:"ip_decimal"`
+	Country    string  `json:"country"`
+	CountryIso string  `json:"country_iso"`
+	CountryEu  bool    `json:"country_eu"`
+	RegionName string  `json:"region_name"`
+	RegionCode string  `json:"region_code"`
+	City       string  `json:"city"`
+	Latitude   float64 `json:"latitude"`
+	Longitude  float64 `json:"longitude"`
+	TimeZone   string  `json:"time_zone"`
+	Asn        string  `json:"asn"`
+	AsnOrg     string  `json:"asn_org"`
+	UserAgent  struct {
+		Product  string `json:"product"`
+		Version  string `json:"version"`
+		RawValue string `json:"raw_value"`
+	} `json:"user_agent"`
+}
+
+func (info IpInfo) String() string {
+	return fmt.Sprintf(
+		"IP: %s\nIP Decimal: %d\nCountry: %s\nCountry ISO: %s\nCountry EU: %t\nRegion Name: %s\nRegion Code: %s\nCity: %s\nLatitude: %f\nLongitude: %f\nTime Zone: %s\nASN: %s\nASN Org: %s\nUser Agent:\n  Product: %s\n  Version: %s\n  Raw Value: %s\n\n",
+		info.IP, info.IPDecimal, info.Country, info.CountryIso, info.CountryEu, info.RegionName, info.RegionCode, info.City, info.Latitude, info.Longitude, info.TimeZone, info.Asn, info.AsnOrg, info.UserAgent.Product, info.UserAgent.Version, info.UserAgent.RawValue,
+	)
+}
+
+func (info IpInfo) Detail() string {
+	return fmt.Sprintf(
+		"IP: %s\nCountry: %s\nASN: %s\nASN Org: %s\nTime Zone: %s\n\n",
+		info.IP, info.Country, info.Asn, info.AsnOrg, info.TimeZone,
+	)
 }
