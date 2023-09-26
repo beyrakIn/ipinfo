@@ -20,4 +20,4 @@ FROM scratch
 
 COPY --from=golang /app/ipinfo ./
 
-ENTRYPOINT [ "./ipinfo" ]
+ENTRYPOINT [ "./ipinfo", "1.1.1.1"]

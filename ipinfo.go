@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"github.com/fatih/color"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 )
 
 var (
@@ -24,9 +24,11 @@ var (
 )
 
 var (
+	client     = &http.Client{}
 	domain     = "https://ifconfig.co/?ip="
 	numWorkers = 1
 	verbose    = false
+	interval   = 1.0
 	done       = make(chan bool)
 )
 
@@ -42,6 +44,9 @@ func main() {
 			numWorkers = int(os.Args[i+1][0] - '0')
 		} else if arg == "-v" || arg == "--verbose" {
 			verbose = true
+		} else if arg == "-i" || arg == "--interval" {
+			// convert arg to int
+			interval = float64(os.Args[i+1][0] - '0')
 		}
 	}
 
@@ -64,10 +69,9 @@ func main() {
 
 	go func() {
 		s := bufio.NewScanner(os.Stdin)
-		greenshell()
 		for s.Scan() {
 			t := strings.TrimSpace(s.Text())
-			//TODO: check regex here
+
 			if err := checkInput(t); err != nil {
 				red(err.Error())
 				continue
@@ -87,6 +91,51 @@ func main() {
 
 }
 
+func doWork(work chan string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for ip := range work {
+		url := domain + ip
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			red(err.Error())
+		}
+
+		req = req.WithContext(ctx)
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Android 4.4; Mobile; rv:41.0) Gecko/41.0 Firefox/41.0")
+		response, err := client.Do(req)
+		if err != nil {
+			red(err.Error())
+		}
+
+		data, _ := io.ReadAll(response.Body)
+		var d IpInfo
+		if err := json.Unmarshal(data, &d); err != nil {
+			red(err.Error())
+		}
+
+		if verbose == true {
+			green(d.String())
+		} else {
+			green(d.Detail())
+		}
+
+		time.Sleep(time.Duration(interval) * time.Second)
+	}
+}
+
+func header() {
+	text := "IF8gX19fX18gIF8gIF9fICBfICBfX19fICBfX19fIA0KfCB8fCAoKV8pfCB8fCAgXHwgfHwgPT09fC8gKCkgXA0KfF98fF98ICAgfF98fF98XF9ffHxfX3wgIFxfX19fLw0K"
+	base64Text := make([]byte, base64.StdEncoding.DecodedLen(len(text)))
+	base64.StdEncoding.Decode(base64Text, []byte(text))
+	yellow(string(base64Text))
+	red("Press CTRL+C to exit\n\n")
+}
+
 func help() {
 	// print help
 	fmt.Println("Usage: ipinfo [options]")
@@ -94,6 +143,7 @@ func help() {
 	fmt.Println("  -h, --help\t\t\t\tShow this help message and exit")
 	fmt.Println("  -v, --verbose\t\t\t\tShow full information")
 	fmt.Println("  -w, --workers\t\t\t\tNumber of workers(default: 1)")
+	fmt.Println("  -i, --interval\t\t\tInterval between requests(default: 0.4)")
 
 	os.Exit(0)
 }
@@ -111,57 +161,6 @@ func checkInput(t string) error {
 	}
 	return nil
 
-}
-
-func doWork(work chan string, wg *sync.WaitGroup) {
-	//TODO: use global request
-	defer wg.Done()
-	ip := <-work
-
-	url := domain + ip
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	client := &http.Client{}
-
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	req = req.WithContext(ctx)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Android 4.4; Mobile; rv:41.0) Gecko/41.0 Firefox/41.0")
-	response, err := client.Do(req)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	data, _ := io.ReadAll(response.Body)
-	var d IpInfo
-	if err := json.Unmarshal(data, &d); err != nil {
-		red(err.Error())
-	}
-
-	if verbose == true {
-		green(d.String())
-	} else {
-		green(d.Detail())
-	}
-	greenshell()
-}
-
-func header() {
-	text := "IF8gX19fX18gIF8gIF9fICBfICBfX19fICBfX19fIA0KfCB8fCAoKV8pfCB8fCAgXHwgfHwgPT09fC8gKCkgXA0KfF98fF98ICAgfF98fF98XF9ffHxfX3wgIFxfX19fLw0K"
-	base64Text := make([]byte, base64.StdEncoding.DecodedLen(len(text)))
-	base64.StdEncoding.Decode(base64Text, []byte(text))
-	yellow(string(base64Text))
-	red("Press CTRL+C to exit\n\n")
-}
-
-func greenshell() {
-	print(color.YellowString("Enter IP address: "))
 }
 
 type IpInfo struct {
